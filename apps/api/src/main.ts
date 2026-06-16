@@ -5,8 +5,20 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = (process.env.WEB_ORIGIN ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: process.env.WEB_ORIGIN?.split(',') ?? ['http://localhost:3000'],
+    origin: (origin, callback) => {
+      const allowed =
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^https:\/\/kanflow[a-z0-9-]*\.vercel\.app$/.test(origin);
+      callback(allowed ? null : new Error(`Origin not allowed by CORS: ${origin}`), allowed);
+    },
     credentials: true,
   });
 
