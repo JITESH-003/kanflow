@@ -132,7 +132,7 @@ export function AuthCard({
           )}
         </AnimatePresence>
 
-        <GradientButton type="submit" loading={loading}>
+        <GradientButton type="submit" loading={loading} className="w-full">
           {isSignup ? 'Create account' : 'Sign in'}
         </GradientButton>
       </form>

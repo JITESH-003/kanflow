@@ -88,3 +88,46 @@ export const authApi = {
     return request<PublicUser>('/auth/me', { method: 'GET' }, true);
   },
 };
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  workspaceId: string;
+  role: string;
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface TeamMemberView {
+  id: string;
+  role: string;
+  userId: string;
+  teamId: string;
+  createdAt: string;
+  user: { id: string; name: string; email: string; avatarUrl: string | null };
+}
+
+export interface TeamDetail {
+  id: string;
+  name: string;
+  workspaceId: string;
+  createdAt: string;
+  members: TeamMemberView[];
+}
+
+export const teamsApi = {
+  list: () => request<TeamSummary[]>('/teams', { method: 'GET' }, true),
+  create: (name: string) =>
+    request<{ id: string; name: string }>(
+      '/teams',
+      { method: 'POST', body: JSON.stringify({ name }) },
+      true,
+    ),
+  get: (id: string) => request<TeamDetail>(`/teams/${id}`, { method: 'GET' }, true),
+  addMember: (id: string, email: string, role: string) =>
+    request<TeamMemberView>(
+      `/teams/${id}/members`,
+      { method: 'POST', body: JSON.stringify({ email, role }) },
+      true,
+    ),
+};
