@@ -1,13 +1,252 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  admin
+  manager
+  member
+  viewer
+}
+
+enum WorkflowRuleType {
+  field_lock
+  notify
+}
+
+enum AttachmentType {
+  file
+  image
+  video
+  tpp
+  design_brief
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ActivityAction {
+  ticket_created
+  ticket_updated
+  stage_changed
+  assignee_added
+  assignee_removed
+  comment_added
+  attachment_added
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+
+  ownedWorkspaces Workspace[]      @relation("WorkspaceOwner")
+  memberships     TeamMember[]
+  createdTickets  Ticket[]         @relation("TicketCreator")
+  assignments     TicketAssignee[]
+  watching        Watcher[]
+  comments        Comment[]
+  uploads         Attachment[]     @relation("AttachmentUploader")
+  notifications   Notification[]
+  activities      ActivityLog[]
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  owner User   @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  teams Team[]
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflow  Workflow?
+  members   TeamMember[]
+  tickets   Ticket[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      Role     @default(member)
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+model Workflow {
+  id     String @id @default(cuid())
+  teamId String @unique
+  name   String
+
+  team   Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  stages WorkflowStage[]
+  rules  WorkflowRule[]
+}
+
+model WorkflowStage {
+  id         String  @id @default(cuid())
+  workflowId String
+  name       String
+  slug       String
+  position   Int
+  isInitial  Boolean @default(false)
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  tickets  Ticket[]
+
+  @@unique([workflowId, slug])
+  @@index([workflowId, position])
+}
+
+model WorkflowRule {
+  id         String           @id @default(cuid())
+  workflowId String
+  type       WorkflowRuleType
+  config     Json
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+model Ticket {
+  id          String    @id @default(cuid())
+  teamId      String
+  parentId    String?
+  title       String
+  description String?
+  stageId     String
+  creatorId   String
+  priority    Priority  @default(medium)
+  effort      Int?
+  etaAt       DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team          Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parent        Ticket?          @relation("SubTickets", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Ticket[]         @relation("SubTickets")
+  stage         WorkflowStage    @relation(fields: [stageId], references: [id])
+  creator       User             @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignees     TicketAssignee[]
+  watchers      Watcher[]
+  comments      Comment[]
+  attachments   Attachment[]
+  notifications Notification[]
+  activities    ActivityLog[]
+
+  @@index([teamId])
+  @@index([stageId])
+  @@index([parentId])
+}
+
+model TicketAssignee {
+  id       String @id @default(cuid())
+  ticketId String
+  userId   String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, userId])
+}
+
+model Watcher {
+  id       String @id @default(cuid())
+  ticketId String
+  userId   String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id])
+  attachments Attachment[]
+
+  @@index([ticketId])
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  ticketId     String?
+  commentId    String?
+  type         AttachmentType
+  url          String
+  fileName     String
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime       @default(now())
+
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@index([commentId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  recipientId String
+  ticketId    String?
+  kind        String
+  payload     Json
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  recipient User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  ticket    Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt])
+}
+
+model ActivityLog {
+  id        String         @id @default(cuid())
+  ticketId  String
+  actorId   String
+  action    ActivityAction
+  payload   Json?
+  createdAt DateTime       @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User   @relation(fields: [actorId], references: [id])
+
+  @@index([ticketId, createdAt])
 }
