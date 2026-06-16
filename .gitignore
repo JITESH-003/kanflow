@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnp.*
+.yarn/*
+
+# environment & secrets
+.env
+.env.*
+!.env.example
+
+# builds
+dist/
+build/
+.next/
+out/
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# test / coverage
+coverage/
+
+# caches
+.turbo/
+*.tsbuildinfo
+
+# os & editor
+.DS_Store
+Thumbs.db
+.idea/
+
+# prisma generated client (regenerated on install)
+**/generated/prisma/
