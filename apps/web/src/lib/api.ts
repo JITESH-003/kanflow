@@ -131,3 +131,55 @@ export const teamsApi = {
       true,
     ),
 };
+
+export interface WorkflowStageView {
+  id: string;
+  workflowId: string;
+  name: string;
+  slug: string;
+  position: number;
+  isInitial: boolean;
+}
+
+export interface WorkflowRuleView {
+  id: string;
+  workflowId: string;
+  type: string;
+  config: { field?: string; lockedFromPosition?: number } & Record<string, unknown>;
+}
+
+export interface WorkflowView {
+  id: string;
+  teamId: string;
+  name: string;
+  stages: WorkflowStageView[];
+  rules: WorkflowRuleView[];
+}
+
+export interface WorkflowStageInput {
+  id?: string;
+  name: string;
+  slug: string;
+  position: number;
+  isInitial: boolean;
+}
+
+export interface WorkflowRuleInput {
+  id?: string;
+  type: string;
+  config: Record<string, unknown>;
+}
+
+export const workflowApi = {
+  get: (teamId: string) =>
+    request<WorkflowView>(`/teams/${teamId}/workflow`, { method: 'GET' }, true),
+  update: (
+    teamId: string,
+    payload: { name?: string; stages: WorkflowStageInput[]; rules: WorkflowRuleInput[] },
+  ) =>
+    request<WorkflowView>(
+      `/teams/${teamId}/workflow`,
+      { method: 'PUT', body: JSON.stringify(payload) },
+      true,
+    ),
+};

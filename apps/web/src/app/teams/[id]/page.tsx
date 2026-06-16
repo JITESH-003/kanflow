@@ -10,7 +10,7 @@ import { GradientButton } from '@/components/ui/gradient-button';
 import { RoleBadge } from '@/components/ui/role-badge';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
-import { teamsApi, type TeamDetail } from '@/lib/api';
+import { teamsApi, workflowApi, type TeamDetail, type WorkflowView } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 
 const ROLE_OPTIONS = [
@@ -26,6 +26,7 @@ export default function TeamPage() {
   const router = useRouter();
 
   const [team, setTeam] = useState<TeamDetail | null>(null);
+  const [workflow, setWorkflow] = useState<WorkflowView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
@@ -42,6 +43,10 @@ export default function TeamPage() {
       .get(id)
       .then(setTeam)
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load team'));
+    workflowApi
+      .get(id)
+      .then(setWorkflow)
+      .catch(() => setWorkflow(null));
   }, [id]);
 
   useEffect(() => {
@@ -92,6 +97,45 @@ export default function TeamPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-white">{team.name}</h1>
               {myRole && <RoleBadge role={myRole} />}
             </div>
+
+            {workflow && (
+              <GlassCard className="mb-6 p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
+                    Workflow
+                  </h2>
+                  {canManage && (
+                    <Link
+                      href={`/teams/${id}/workflow`}
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/10"
+                    >
+                      Edit workflow
+                    </Link>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {workflow.stages.map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2">
+                      <span
+                        className={`rounded-lg border px-3 py-1.5 text-sm ${
+                          s.isInitial
+                            ? 'border-indigo-400/30 bg-indigo-500/15 text-indigo-100'
+                            : 'border-white/10 bg-white/[0.03] text-white/70'
+                        }`}
+                      >
+                        {s.name}
+                        {s.isInitial && (
+                          <span className="ml-1.5 text-[10px] uppercase text-indigo-300/80">
+                            start
+                          </span>
+                        )}
+                      </span>
+                      {i < workflow.stages.length - 1 && <span className="text-white/25">→</span>}
+                    </div>
+                  ))}
+                </div>
+              </GlassCard>
+            )}
 
             <GlassCard className="p-6">
               <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-white/40">
