@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { ticketsApi, type TeamMemberView } from '@/lib/api';
+import { useSocket } from '@/lib/socket-context';
 import { GradientButton } from './ui/gradient-button';
 import { Select } from './ui/select';
 import { Spinner } from './ui/spinner';
@@ -39,6 +40,8 @@ export function TicketModal({
   const [priority, setPriority] = useState('medium');
   const [comment, setComment] = useState('');
   const [assignUser, setAssignUser] = useState('');
+  const socket = useSocket();
+  const [viewers, setViewers] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (ticket) {
@@ -47,6 +50,26 @@ export function TicketModal({
       setPriority(ticket.priority);
     }
   }, [ticket]);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.emit('ticket:join', { ticketId });
+    const refetch = () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+    socket.on('comment:added', refetch);
+    socket.on('ticket:updated', refetch);
+    socket.on('ticket:assigned', refetch);
+    const onPresence = (data: { room: string; users: { id: string; name: string }[] }) => {
+      if (data.room === `ticket:${ticketId}`) setViewers(data.users);
+    };
+    socket.on('presence:update', onPresence);
+    return () => {
+      socket.emit('ticket:leave', { ticketId });
+      socket.off('comment:added', refetch);
+      socket.off('ticket:updated', refetch);
+      socket.off('ticket:assigned', refetch);
+      socket.off('presence:update', onPresence);
+    };
+  }, [socket, ticketId, qc]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
@@ -80,7 +103,7 @@ export function TicketModal({
   const assignable = members.filter((m) => !assignedIds.has(m.user.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8">
       <motion.div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
@@ -88,7 +111,7 @@ export function TicketModal({
         animate={{ opacity: 1 }}
       />
       <motion.div
-        className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0e0e14]/95 p-6 shadow-2xl backdrop-blur-xl"
+        className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-[#0e0e14]/95 p-6 shadow-2xl backdrop-blur-xl"
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
@@ -111,6 +134,22 @@ export function TicketModal({
                 <span className="rounded-full bg-white/10 px-2 py-0.5">{ticket.stage.name}</span>
                 <span>·</span>
                 <span>by {ticket.creator.name}</span>
+                {viewers.length > 0 && (
+                  <span className="ml-auto flex items-center gap-1.5 text-emerald-300/80">
+                    <span className="flex -space-x-2">
+                      {viewers.slice(0, 4).map((v) => (
+                        <span
+                          key={v.id}
+                          title={v.name}
+                          className="flex h-5 w-5 items-center justify-center rounded-full border border-[#0e0e14] bg-gradient-to-br from-emerald-500 to-teal-500 text-[9px] font-semibold text-white"
+                        >
+                          {v.name.charAt(0).toUpperCase()}
+                        </span>
+                      ))}
+                    </span>
+                    viewing
+                  </span>
+                )}
               </div>
               {canWrite ? (
                 <input

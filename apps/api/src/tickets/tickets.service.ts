@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ActivityAction, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { WorkflowService } from '../workflow/workflow.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -19,6 +20,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflows: WorkflowService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   private async addWatcher(ticketId: string, userId: string) {
@@ -86,7 +88,10 @@ export class TicketsService {
     });
     await this.addWatcher(ticket.id, userId);
     await this.log(ticket.id, userId, 'ticket_created', { title: ticket.title });
-    return this.getOne(ticket.id);
+
+    const created = await this.getOne(ticket.id);
+    this.realtime.emitToBoard(dto.teamId, 'ticket:created', created);
+    return created;
   }
 
   async update(ticketId: string, userId: string, dto: UpdateTicketDto) {
@@ -101,7 +106,11 @@ export class TicketsService {
       },
     });
     await this.log(ticketId, userId, 'ticket_updated', { fields: Object.keys(dto) });
-    return this.getOne(ticketId);
+
+    const updated = await this.getOne(ticketId);
+    this.realtime.emitToBoard(updated.teamId, 'ticket:updated', updated);
+    this.realtime.emitToTicket(ticketId, 'ticket:updated', updated);
+    return updated;
   }
 
   async move(ticketId: string, userId: string, stageId: string) {
@@ -125,7 +134,11 @@ export class TicketsService {
       from: ticket.stage?.name ?? null,
       to: stage.name,
     });
-    return this.getOne(ticketId);
+
+    const moved = await this.getOne(ticketId);
+    this.realtime.emitToBoard(moved.teamId, 'ticket:moved', moved);
+    this.realtime.emitToTicket(ticketId, 'ticket:updated', moved);
+    return moved;
   }
 
   async addAssignee(ticketId: string, actorId: string, targetUserId: string) {
@@ -145,7 +158,11 @@ export class TicketsService {
       await this.addWatcher(ticketId, targetUserId);
       await this.log(ticketId, actorId, 'assignee_added', { userId: targetUserId });
     }
-    return this.getOne(ticketId);
+
+    const result = await this.getOne(ticketId);
+    this.realtime.emitToBoard(result.teamId, 'ticket:assigned', result);
+    this.realtime.emitToTicket(ticketId, 'ticket:assigned', result);
+    return result;
   }
 
   async removeAssignee(ticketId: string, actorId: string, targetUserId: string) {
@@ -158,7 +175,11 @@ export class TicketsService {
       });
       await this.log(ticketId, actorId, 'assignee_removed', { userId: targetUserId });
     }
-    return this.getOne(ticketId);
+
+    const result = await this.getOne(ticketId);
+    this.realtime.emitToBoard(result.teamId, 'ticket:assigned', result);
+    this.realtime.emitToTicket(ticketId, 'ticket:assigned', result);
+    return result;
   }
 
   listComments(ticketId: string) {
@@ -178,6 +199,9 @@ export class TicketsService {
     });
     await this.addWatcher(ticketId, authorId);
     await this.log(ticketId, authorId, 'comment_added');
+
+    this.realtime.emitToTicket(ticketId, 'comment:added', comment);
+    this.realtime.emitToBoard(ticket.teamId, 'ticket:updated', { id: ticketId });
     return comment;
   }
 }

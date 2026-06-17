@@ -29,6 +29,7 @@ import {
   type TicketCard,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { useSocket } from '@/lib/socket-context';
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: 'bg-white/10 text-white/50',
@@ -125,7 +126,9 @@ export default function BoardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
+  const socket = useSocket();
 
+  const [presence, setPresence] = useState<{ id: string; name: string }[]>([]);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -137,6 +140,28 @@ export default function BoardPage() {
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.emit('board:join', { teamId: id });
+    const refetch = () => qc.invalidateQueries({ queryKey: ['tickets', id] });
+    socket.on('ticket:created', refetch);
+    socket.on('ticket:moved', refetch);
+    socket.on('ticket:updated', refetch);
+    socket.on('ticket:assigned', refetch);
+    const onPresence = (data: { room: string; users: { id: string; name: string }[] }) => {
+      if (data.room === `board:${id}`) setPresence(data.users);
+    };
+    socket.on('presence:update', onPresence);
+    return () => {
+      socket.emit('board:leave', { teamId: id });
+      socket.off('ticket:created', refetch);
+      socket.off('ticket:moved', refetch);
+      socket.off('ticket:updated', refetch);
+      socket.off('ticket:assigned', refetch);
+      socket.off('presence:update', onPresence);
+    };
+  }, [socket, id, qc]);
 
   const teamQ = useQuery({ queryKey: ['team', id], queryFn: () => teamsApi.get(id), enabled: !!user });
   const wfQ = useQuery({
@@ -232,6 +257,19 @@ export default function BoardPage() {
               {teamQ.data?.name ?? 'Team'}
             </h1>
             {myRole && <RoleBadge role={myRole} />}
+            {presence.length > 0 && (
+              <div className="ml-1 flex items-center -space-x-2">
+                {presence.slice(0, 5).map((p) => (
+                  <div
+                    key={p.id}
+                    title={`${p.name} is viewing`}
+                    className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#08080b] bg-gradient-to-br from-emerald-500 to-teal-500 text-[11px] font-semibold text-white"
+                  >
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Link

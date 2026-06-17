@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { TeamsModule } from './teams/teams.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { WorkflowModule } from './workflow/workflow.module';
@@ -16,6 +17,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     TeamsModule,
     WorkflowModule,
     TicketsModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
