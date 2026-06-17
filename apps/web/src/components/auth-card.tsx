@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useState, type FormEvent } from 'react';
 import { GlassCard } from './ui/glass-card';
 import { GradientButton } from './ui/gradient-button';
+import { PasswordField } from './ui/password-field';
 import { TextField } from './ui/text-field';
 
 export type AuthMode = 'signin' | 'signup';
@@ -23,6 +24,7 @@ export function AuthCard({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -31,6 +33,10 @@ export function AuthCard({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (isSignup && password !== confirm) {
+      setError('Passwords do not match');
+      return;
+    }
     setLoading(true);
     try {
       await onSubmit({ name, email, password }, mode);
@@ -108,16 +114,37 @@ export function AuthCard({
           onChange={setEmail}
         />
 
-        <TextField
+        <PasswordField
           id="password"
           label="Password"
-          type="password"
           value={password}
           autoComplete={isSignup ? 'new-password' : 'current-password'}
           placeholder="••••••••"
           minLength={isSignup ? 8 : undefined}
           onChange={setPassword}
         />
+
+        <AnimatePresence initial={false} mode="popLayout">
+          {isSignup && (
+            <motion.div
+              key="confirm-field"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <PasswordField
+                id="confirm-password"
+                label="Confirm password"
+                value={confirm}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                onChange={setConfirm}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {error && (
