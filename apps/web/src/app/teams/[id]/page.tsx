@@ -1,57 +1,209 @@
 'use client';
 
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { AuroraBackground } from '@/components/aurora-background';
-import { GlassCard } from '@/components/ui/glass-card';
+import { TicketModal } from '@/components/ticket-modal';
 import { GradientButton } from '@/components/ui/gradient-button';
+import { Modal } from '@/components/ui/modal';
 import { RoleBadge } from '@/components/ui/role-badge';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
-import { teamsApi, workflowApi, type TeamDetail, type WorkflowView } from '@/lib/api';
+import {
+  teamsApi,
+  ticketsApi,
+  workflowApi,
+  type StageRef,
+  type TicketCard,
+} from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 
-const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'member', label: 'Member' },
-  { value: 'viewer', label: 'Viewer' },
-];
+const PRIORITY_STYLES: Record<string, string> = {
+  low: 'bg-white/10 text-white/50',
+  medium: 'bg-sky-500/15 text-sky-200',
+  high: 'bg-amber-500/15 text-amber-200',
+  urgent: 'bg-red-500/20 text-red-200',
+};
 
-export default function TeamPage() {
+function TicketCardView({ ticket, onClick }: { ticket: TicketCard; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: ticket.id,
+  });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={onClick}
+      className={`cursor-grab touch-none rounded-xl border border-white/10 bg-white/[0.05] p-3 text-left shadow-md backdrop-blur transition-colors hover:border-white/25 ${
+        isDragging ? 'opacity-50' : ''
+      }`}
+    >
+      <p className="text-sm font-medium leading-snug text-white">{ticket.title}</p>
+      <div className="mt-2.5 flex items-center justify-between">
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${
+            PRIORITY_STYLES[ticket.priority] ?? PRIORITY_STYLES.medium
+          }`}
+        >
+          {ticket.priority}
+        </span>
+        <div className="flex items-center gap-2">
+          {ticket._count.comments > 0 && (
+            <span className="text-[11px] text-white/40">💬 {ticket._count.comments}</span>
+          )}
+          <div className="flex -space-x-1.5">
+            {ticket.assignees.slice(0, 3).map((a) => (
+              <div
+                key={a.id}
+                title={a.user.name}
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-[#0e0e14] bg-gradient-to-br from-indigo-500 to-violet-500 text-[10px] font-semibold text-white"
+              >
+                {a.user.name.charAt(0).toUpperCase()}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Column({
+  stage,
+  tickets,
+  onCardClick,
+}: {
+  stage: StageRef;
+  tickets: TicketCard[];
+  onCardClick: (id: string) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  return (
+    <div className="flex h-full w-72 shrink-0 flex-col">
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <h3 className="text-sm font-semibold text-white">{stage.name}</h3>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/50">
+          {tickets.length}
+        </span>
+        {stage.isInitial && (
+          <span className="text-[10px] uppercase tracking-wide text-indigo-300/70">start</span>
+        )}
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`no-scrollbar flex flex-1 flex-col gap-2 overflow-y-auto rounded-2xl border p-2 transition-colors ${
+          isOver ? 'border-indigo-400/40 bg-indigo-500/5' : 'border-white/5 bg-white/[0.02]'
+        }`}
+      >
+        {tickets.map((t) => (
+          <TicketCardView key={t.id} ticket={t} onClick={() => onCardClick(t.id)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const qc = useQueryClient();
 
-  const [team, setTeam] = useState<TeamDetail | null>(null);
-  const [workflow, setWorkflow] = useState<WorkflowView | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('member');
-  const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
 
-  const reload = useCallback(() => {
-    teamsApi
-      .get(id)
-      .then(setTeam)
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load team'));
-    workflowApi
-      .get(id)
-      .then(setWorkflow)
-      .catch(() => setWorkflow(null));
-  }, [id]);
+  const teamQ = useQuery({ queryKey: ['team', id], queryFn: () => teamsApi.get(id), enabled: !!user });
+  const wfQ = useQuery({
+    queryKey: ['workflow', id],
+    queryFn: () => workflowApi.get(id),
+    enabled: !!user,
+  });
+  const ticketsQ = useQuery({
+    queryKey: ['tickets', id],
+    queryFn: () => ticketsApi.list(id),
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    if (user && id) reload();
-  }, [user, id, reload]);
+  const moveMut = useMutation({
+    mutationFn: ({ ticketId, stageId }: { ticketId: string; stageId: string }) =>
+      ticketsApi.move(ticketId, stageId),
+    onMutate: async ({ ticketId, stageId }) => {
+      await qc.cancelQueries({ queryKey: ['tickets', id] });
+      const prev = qc.getQueryData<TicketCard[]>(['tickets', id]);
+      qc.setQueryData<TicketCard[]>(['tickets', id], (old) =>
+        old?.map((t) => (t.id === ticketId ? { ...t, stageId } : t)),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['tickets', id], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['tickets', id] }),
+  });
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const myRole = teamQ.data?.members.find((m) => m.user.id === user?.id)?.role;
+  const canWrite = !!myRole && myRole !== 'viewer';
+
+  function onDragEnd(event: DragEndEvent) {
+    const ticketId = String(event.active.id);
+    const targetStage = event.over ? String(event.over.id) : null;
+    if (!targetStage) return;
+    const ticket = ticketsQ.data?.find((t) => t.id === ticketId);
+    if (ticket && ticket.stageId !== targetStage) {
+      moveMut.mutate({ ticketId, stageId: targetStage });
+    }
+  }
+
+  async function createTicket(e: FormEvent) {
+    e.preventDefault();
+    setCreateError(null);
+    setCreating(true);
+    try {
+      await ticketsApi.create({
+        teamId: id,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        priority,
+      });
+      setTitle('');
+      setDescription('');
+      setPriority('medium');
+      setNewOpen(false);
+      qc.invalidateQueries({ queryKey: ['tickets', id] });
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Could not create ticket');
+    } finally {
+      setCreating(false);
+    }
+  }
 
   if (loading || !user) {
     return (
@@ -62,145 +214,117 @@ export default function TeamPage() {
     );
   }
 
-  const myRole = team?.members.find((m) => m.user.id === user.id)?.role;
-  const canManage = myRole === 'admin' || myRole === 'manager';
-
-  async function handleAdd(e: FormEvent) {
-    e.preventDefault();
-    setAddError(null);
-    setAdding(true);
-    try {
-      await teamsApi.addMember(id, email.trim(), role);
-      setEmail('');
-      reload();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Could not add member');
-    } finally {
-      setAdding(false);
-    }
-  }
+  const stages = wfQ.data?.stages ?? [];
+  const tickets = ticketsQ.data ?? [];
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative flex h-screen flex-col overflow-hidden">
       <AuroraBackground />
       <AppHeader />
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="flex flex-1 flex-col overflow-hidden px-6 pt-6">
         <Link href="/" className="text-sm text-white/50 transition-colors hover:text-white/80">
           &larr; Back to teams
         </Link>
 
-        {loadError && <p className="mt-4 text-sm text-red-300">{loadError}</p>}
+        <div className="mb-6 mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              {teamQ.data?.name ?? 'Team'}
+            </h1>
+            {myRole && <RoleBadge role={myRole} />}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/teams/${id}/members`}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10"
+            >
+              Members
+            </Link>
+            <Link
+              href={`/teams/${id}/workflow`}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10"
+            >
+              Workflow
+            </Link>
+            {canWrite && <GradientButton onClick={() => setNewOpen(true)}>+ New ticket</GradientButton>}
+          </div>
+        </div>
 
-        {team && (
-          <>
-            <div className="mb-8 mt-3 flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">{team.name}</h1>
-              {myRole && <RoleBadge role={myRole} />}
+        {wfQ.isLoading || ticketsQ.isLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          </div>
+        ) : (
+          <DndContext sensors={sensors} onDragEnd={canWrite ? onDragEnd : undefined}>
+            <div className="no-scrollbar flex flex-1 gap-4 overflow-x-auto pb-6">
+              {stages.map((s) => (
+                <Column
+                  key={s.id}
+                  stage={s}
+                  tickets={tickets.filter((t) => t.stageId === s.id)}
+                  onCardClick={setOpenTicketId}
+                />
+              ))}
             </div>
-
-            {workflow && (
-              <GlassCard className="mb-6 p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
-                    Workflow
-                  </h2>
-                  {canManage && (
-                    <Link
-                      href={`/teams/${id}/workflow`}
-                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/10"
-                    >
-                      Edit workflow
-                    </Link>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {workflow.stages.map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-2">
-                      <span
-                        className={`rounded-lg border px-3 py-1.5 text-sm ${
-                          s.isInitial
-                            ? 'border-indigo-400/30 bg-indigo-500/15 text-indigo-100'
-                            : 'border-white/10 bg-white/[0.03] text-white/70'
-                        }`}
-                      >
-                        {s.name}
-                        {s.isInitial && (
-                          <span className="ml-1.5 text-[10px] uppercase text-indigo-300/80">
-                            start
-                          </span>
-                        )}
-                      </span>
-                      {i < workflow.stages.length - 1 && <span className="text-white/25">→</span>}
-                    </div>
-                  ))}
-                </div>
-              </GlassCard>
-            )}
-
-            <GlassCard className="p-6">
-              <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-white/40">
-                Members ({team.members.length})
-              </h2>
-              <ul className="space-y-2">
-                {team.members.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">
-                        {m.user.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {m.user.name}
-                          {m.user.id === user.id && <span className="text-white/40"> (you)</span>}
-                        </p>
-                        <p className="text-xs text-white/40">{m.user.email}</p>
-                      </div>
-                    </div>
-                    <RoleBadge role={m.role} />
-                  </li>
-                ))}
-              </ul>
-            </GlassCard>
-
-            {canManage && (
-              <GlassCard className="mt-6 p-6">
-                <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-white/40">
-                  Add a member
-                </h2>
-                <form onSubmit={handleAdd} className="space-y-4">
-                  <TextField
-                    id="member-email"
-                    label="Email"
-                    type="email"
-                    value={email}
-                    autoComplete="off"
-                    placeholder="teammate@example.com"
-                    onChange={setEmail}
-                  />
-                  <Select
-                    id="member-role"
-                    label="Role"
-                    value={role}
-                    onChange={setRole}
-                    options={ROLE_OPTIONS}
-                  />
-                  {addError && (
-                    <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                      {addError}
-                    </p>
-                  )}
-                  <GradientButton type="submit" loading={adding} className="w-full">
-                    Add member
-                  </GradientButton>
-                </form>
-              </GlassCard>
-            )}
-          </>
+          </DndContext>
         )}
       </main>
+
+      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New ticket">
+        <form onSubmit={createTicket} className="space-y-4">
+          <TextField
+            id="ticket-title"
+            label="Title"
+            type="text"
+            value={title}
+            autoComplete="off"
+            placeholder="Build the login page"
+            onChange={setTitle}
+          />
+          <div className="space-y-1.5">
+            <label htmlFor="ticket-desc" className="block text-sm font-medium text-white/60">
+              Description
+            </label>
+            <textarea
+              id="ticket-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+          <Select
+            id="ticket-priority"
+            label="Priority"
+            value={priority}
+            onChange={setPriority}
+            options={[
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' },
+              { value: 'urgent', label: 'Urgent' },
+            ]}
+          />
+          {createError && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {createError}
+            </p>
+          )}
+          <GradientButton type="submit" loading={creating} className="w-full">
+            Create ticket
+          </GradientButton>
+        </form>
+      </Modal>
+
+      {openTicketId && (
+        <TicketModal
+          ticketId={openTicketId}
+          teamId={id}
+          canWrite={canWrite}
+          members={teamQ.data?.members ?? []}
+          onClose={() => setOpenTicketId(null)}
+        />
+      )}
     </div>
   );
 }

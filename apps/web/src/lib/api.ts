@@ -183,3 +183,117 @@ export const workflowApi = {
       true,
     ),
 };
+
+export interface StageRef {
+  id: string;
+  name: string;
+  slug: string;
+  position: number;
+  isInitial: boolean;
+}
+
+export interface UserRef {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export interface AssigneeView {
+  id: string;
+  ticketId: string;
+  userId: string;
+  user: UserRef;
+}
+
+export interface CommentView {
+  id: string;
+  ticketId: string;
+  body: string;
+  createdAt: string;
+  author: UserRef;
+}
+
+export interface ActivityView {
+  id: string;
+  action: string;
+  payload: unknown;
+  createdAt: string;
+  actor: UserRef;
+}
+
+export interface TicketCard {
+  id: string;
+  teamId: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  effort: number | null;
+  etaAt: string | null;
+  stageId: string;
+  stage: StageRef;
+  assignees: AssigneeView[];
+  _count: { comments: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketDetail {
+  id: string;
+  teamId: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  effort: number | null;
+  etaAt: string | null;
+  stageId: string;
+  stage: StageRef;
+  creator: UserRef;
+  assignees: AssigneeView[];
+  comments: CommentView[];
+  activities: ActivityView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ticketsApi = {
+  list: (teamId: string) =>
+    request<TicketCard[]>(`/teams/${teamId}/tickets`, { method: 'GET' }, true),
+  create: (payload: {
+    teamId: string;
+    title: string;
+    description?: string;
+    priority?: string;
+  }) => request<TicketDetail>('/tickets', { method: 'POST', body: JSON.stringify(payload) }, true),
+  get: (ticketId: string) =>
+    request<TicketDetail>(`/tickets/${ticketId}`, { method: 'GET' }, true),
+  update: (
+    ticketId: string,
+    payload: { title?: string; description?: string; priority?: string },
+  ) =>
+    request<TicketDetail>(
+      `/tickets/${ticketId}`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+      true,
+    ),
+  move: (ticketId: string, stageId: string) =>
+    request<TicketDetail>(
+      `/tickets/${ticketId}/stage`,
+      { method: 'PATCH', body: JSON.stringify({ stageId }) },
+      true,
+    ),
+  addAssignee: (ticketId: string, userId: string) =>
+    request<TicketDetail>(
+      `/tickets/${ticketId}/assignees`,
+      { method: 'POST', body: JSON.stringify({ userId }) },
+      true,
+    ),
+  removeAssignee: (ticketId: string, userId: string) =>
+    request<TicketDetail>(`/tickets/${ticketId}/assignees/${userId}`, { method: 'DELETE' }, true),
+  addComment: (ticketId: string, body: string) =>
+    request<CommentView>(
+      `/tickets/${ticketId}/comments`,
+      { method: 'POST', body: JSON.stringify({ body }) },
+      true,
+    ),
+};

@@ -21,3 +21,12 @@ body {
 ::selection {
   background: rgba(139, 92, 246, 0.35);
 }
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}

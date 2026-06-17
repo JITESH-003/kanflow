@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TeamsModule } from './teams/teams.module';
+import { TicketsModule } from './tickets/tickets.module';
 import { WorkflowModule } from './workflow/workflow.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     AuthModule,
     TeamsModule,
     WorkflowModule,
+    TicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
