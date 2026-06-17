@@ -264,6 +264,7 @@ export const ticketsApi = {
     title: string;
     description?: string;
     priority?: string;
+    assigneeIds?: string[];
   }) => request<TicketDetail>('/tickets', { method: 'POST', body: JSON.stringify(payload) }, true),
   get: (ticketId: string) =>
     request<TicketDetail>(`/tickets/${ticketId}`, { method: 'GET' }, true),
@@ -296,4 +297,33 @@ export const ticketsApi = {
       { method: 'POST', body: JSON.stringify({ body }) },
       true,
     ),
+  mine: (filter: 'assigned' | 'created') =>
+    request<MineTicket[]>(`/me/tickets?filter=${filter}`, { method: 'GET' }, true),
+};
+
+export interface MineTicket extends TicketCard {
+  team: { id: string; name: string };
+}
+
+export interface NotificationView {
+  id: string;
+  recipientId: string;
+  ticketId: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () =>
+    request<{ items: NotificationView[]; unread: number }>(
+      '/notifications',
+      { method: 'GET' },
+      true,
+    ),
+  markRead: (id: string) =>
+    request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'PATCH' }, true),
+  markAllRead: () =>
+    request<{ success: boolean }>('/notifications/read-all', { method: 'POST' }, true),
 };

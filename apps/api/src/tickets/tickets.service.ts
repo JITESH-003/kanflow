@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ActivityAction, Prisma } from '../generated/prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -21,6 +22,7 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly workflows: WorkflowService,
     private readonly realtime: RealtimeGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async addWatcher(ticketId: string, userId: string) {
@@ -54,6 +56,23 @@ export class TicketsService {
     });
   }
 
+  listMine(userId: string, filter: 'assigned' | 'created') {
+    const where =
+      filter === 'created'
+        ? { creatorId: userId }
+        : { assignees: { some: { userId } } };
+    return this.prisma.ticket.findMany({
+      where,
+      include: {
+        stage: STAGE_SELECT,
+        team: { select: { id: true, name: true } },
+        assignees: { include: { user: USER_SELECT } },
+        _count: { select: { comments: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
   async getOne(ticketId: string) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
@@ -74,6 +93,16 @@ export class TicketsService {
     const initial = workflow.stages.find((s) => s.isInitial) ?? workflow.stages[0];
     if (!initial) throw new BadRequestException('This team has no workflow stages yet');
 
+    const assigneeIds = [...new Set(dto.assigneeIds ?? [])];
+    if (assigneeIds.length) {
+      const memberCount = await this.prisma.teamMember.count({
+        where: { teamId: dto.teamId, userId: { in: assigneeIds } },
+      });
+      if (memberCount !== assigneeIds.length) {
+        throw new BadRequestException('One or more assignees are not members of this team');
+      }
+    }
+
     const ticket = await this.prisma.ticket.create({
       data: {
         teamId: dto.teamId,
@@ -88,6 +117,15 @@ export class TicketsService {
     });
     await this.addWatcher(ticket.id, userId);
     await this.log(ticket.id, userId, 'ticket_created', { title: ticket.title });
+
+    for (const targetId of assigneeIds) {
+      await this.prisma.ticketAssignee.create({ data: { ticketId: ticket.id, userId: targetId } });
+      await this.addWatcher(ticket.id, targetId);
+      await this.log(ticket.id, userId, 'assignee_added', { userId: targetId });
+      await this.notifications.notifyUser(targetId, userId, ticket.id, 'assigned', {
+        ticketTitle: ticket.title,
+      });
+    }
 
     const created = await this.getOne(ticket.id);
     this.realtime.emitToBoard(dto.teamId, 'ticket:created', created);
@@ -131,6 +169,8 @@ export class TicketsService {
 
     await this.prisma.ticket.update({ where: { id: ticketId }, data: { stageId } });
     await this.log(ticketId, userId, 'stage_changed', {
+      fromStageId: ticket.stageId,
+      toStageId: stage.id,
       from: ticket.stage?.name ?? null,
       to: stage.name,
     });
@@ -138,6 +178,11 @@ export class TicketsService {
     const moved = await this.getOne(ticketId);
     this.realtime.emitToBoard(moved.teamId, 'ticket:moved', moved);
     this.realtime.emitToTicket(ticketId, 'ticket:updated', moved);
+    await this.notifications.notifyWatchers(ticketId, userId, 'stage_changed', {
+      ticketTitle: ticket.title,
+      from: ticket.stage?.name ?? null,
+      to: stage.name,
+    });
     return moved;
   }
 
@@ -157,6 +202,9 @@ export class TicketsService {
       await this.prisma.ticketAssignee.create({ data: { ticketId, userId: targetUserId } });
       await this.addWatcher(ticketId, targetUserId);
       await this.log(ticketId, actorId, 'assignee_added', { userId: targetUserId });
+      await this.notifications.notifyUser(targetUserId, actorId, ticketId, 'assigned', {
+        ticketTitle: ticket.title,
+      });
     }
 
     const result = await this.getOne(ticketId);
@@ -202,6 +250,9 @@ export class TicketsService {
 
     this.realtime.emitToTicket(ticketId, 'comment:added', comment);
     this.realtime.emitToBoard(ticket.teamId, 'ticket:updated', { id: ticketId });
+    await this.notifications.notifyWatchers(ticketId, authorId, 'comment_added', {
+      ticketTitle: ticket.title,
+    });
     return comment;
   }
 }

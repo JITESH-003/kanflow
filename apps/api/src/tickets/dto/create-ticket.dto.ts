@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -36,4 +37,9 @@ export class CreateTicketDto {
   @IsOptional()
   @IsISO8601()
   etaAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  assigneeIds?: string[];
 }

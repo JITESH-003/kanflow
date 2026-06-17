@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser, type AuthUser } from '../auth/decorators/current-user.decorator';
@@ -29,6 +30,11 @@ export class TicketsController {
   @UseGuards(TeamRolesGuard)
   list(@Param('teamId') teamId: string) {
     return this.tickets.listForTeam(teamId);
+  }
+
+  @Get('me/tickets')
+  mine(@CurrentUser() user: AuthUser, @Query('filter') filter?: string) {
+    return this.tickets.listMine(user.id, filter === 'created' ? 'created' : 'assigned');
   }
 
   @Post('tickets')

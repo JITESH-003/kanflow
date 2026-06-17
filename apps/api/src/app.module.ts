@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TeamsModule } from './teams/teams.module';
@@ -18,6 +19,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     WorkflowModule,
     TicketsModule,
     RealtimeModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

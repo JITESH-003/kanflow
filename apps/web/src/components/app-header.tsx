@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { NotificationBell } from './notification-bell';
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -18,7 +19,7 @@ export function AppHeader() {
           <span className="font-semibold tracking-tight text-white">kanflow</span>
         </Link>
         <div className="flex items-center gap-3">
-          {user && <span className="hidden text-sm text-white/50 sm:block">{user.email}</span>}
+          {user && <NotificationBell />}
           <button
             onClick={() => {
               logout();

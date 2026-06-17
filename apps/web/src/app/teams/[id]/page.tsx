@@ -11,12 +11,13 @@ import {
 } from '@dnd-kit/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { AuroraBackground } from '@/components/aurora-background';
 import { TicketModal } from '@/components/ticket-modal';
 import { GradientButton } from '@/components/ui/gradient-button';
+import { MemberPicker } from '@/components/ui/member-picker';
 import { Modal } from '@/components/ui/modal';
 import { RoleBadge } from '@/components/ui/role-badge';
 import { Select } from '@/components/ui/select';
@@ -125,10 +126,12 @@ export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
   const socket = useSocket();
 
   const [presence, setPresence] = useState<{ id: string; name: string }[]>([]);
+  const [mineOnly, setMineOnly] = useState(false);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -136,6 +139,7 @@ export default function BoardPage() {
   const [priority, setPriority] = useState('medium');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -162,6 +166,11 @@ export default function BoardPage() {
       socket.off('presence:update', onPresence);
     };
   }, [socket, id, qc]);
+
+  useEffect(() => {
+    const ticketParam = searchParams.get('ticket');
+    if (ticketParam) setOpenTicketId(ticketParam);
+  }, [searchParams]);
 
   const teamQ = useQuery({ queryKey: ['team', id], queryFn: () => teamsApi.get(id), enabled: !!user });
   const wfQ = useQuery({
@@ -217,10 +226,12 @@ export default function BoardPage() {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
+        assigneeIds: newAssigneeIds,
       });
       setTitle('');
       setDescription('');
       setPriority('medium');
+      setNewAssigneeIds([]);
       setNewOpen(false);
       qc.invalidateQueries({ queryKey: ['tickets', id] });
     } catch (err) {
@@ -272,6 +283,16 @@ export default function BoardPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMineOnly((v) => !v)}
+              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                mineOnly
+                  ? 'border-indigo-400/40 bg-indigo-500/20 text-indigo-100'
+                  : 'border-white/10 bg-white/5 text-white/80 hover:bg-white/10'
+              }`}
+            >
+              My tickets
+            </button>
             <Link
               href={`/teams/${id}/members`}
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10"
@@ -299,7 +320,11 @@ export default function BoardPage() {
                 <Column
                   key={s.id}
                   stage={s}
-                  tickets={tickets.filter((t) => t.stageId === s.id)}
+                  tickets={tickets.filter(
+                    (t) =>
+                      t.stageId === s.id &&
+                      (!mineOnly || t.assignees.some((a) => a.user.id === user.id)),
+                  )}
                   onCardClick={setOpenTicketId}
                 />
               ))}
@@ -308,7 +333,14 @@ export default function BoardPage() {
         )}
       </main>
 
-      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New ticket">
+      <Modal
+        open={newOpen}
+        onClose={() => {
+          setNewOpen(false);
+          setNewAssigneeIds([]);
+        }}
+        title="New ticket"
+      >
         <form onSubmit={createTicket} className="space-y-4">
           <TextField
             id="ticket-title"
@@ -343,6 +375,48 @@ export default function BoardPage() {
               { value: 'urgent', label: 'Urgent' },
             ]}
           />
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-white/60">
+              Assign people (optional)
+            </label>
+            {newAssigneeIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {newAssigneeIds.map((uid) => {
+                  const m = teamQ.data?.members.find((mm) => mm.user.id === uid);
+                  return (
+                    <span
+                      key={uid}
+                      className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 py-0.5 pl-1 pr-2 text-xs text-white/80"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold text-white">
+                        {m?.user.name.charAt(0).toUpperCase() ?? '?'}
+                      </span>
+                      {m?.user.name ?? 'Member'}
+                      <button
+                        type="button"
+                        onClick={() => setNewAssigneeIds((ids) => ids.filter((x) => x !== uid))}
+                        className="text-white/30 transition-colors hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <MemberPicker
+              members={(teamQ.data?.members ?? [])
+                .filter((m) => !newAssigneeIds.includes(m.user.id))
+                .map((m) => ({
+                  id: m.user.id,
+                  name: m.user.name,
+                  email: m.user.email,
+                  role: m.role,
+                }))}
+              onSelect={(uid) => setNewAssigneeIds((ids) => [...ids, uid])}
+              placeholder="Search people…"
+            />
+          </div>
           {createError && (
             <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
               {createError}

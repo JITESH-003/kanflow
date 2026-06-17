@@ -157,4 +157,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   emitToTicket(ticketId: string, event: string, payload: unknown) {
     this.server.to(`ticket:${ticketId}`).emit(event, payload);
   }
+
+  emitToUser(userId: string, event: string, payload: unknown) {
+    this.server.to(`user:${userId}`).emit(event, payload);
+  }
 }
