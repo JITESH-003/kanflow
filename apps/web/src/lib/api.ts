@@ -212,6 +212,7 @@ export interface CommentView {
   body: string;
   createdAt: string;
   author: UserRef;
+  attachments: AttachmentView[];
 }
 
 export interface ActivityView {
@@ -251,6 +252,7 @@ export interface TicketDetail {
   creator: UserRef;
   assignees: AssigneeView[];
   comments: CommentView[];
+  attachments: AttachmentView[];
   activities: ActivityView[];
   createdAt: string;
   updatedAt: string;
@@ -326,4 +328,38 @@ export const notificationsApi = {
     request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'PATCH' }, true),
   markAllRead: () =>
     request<{ success: boolean }>('/notifications/read-all', { method: 'POST' }, true),
+};
+
+export interface AttachmentView {
+  id: string;
+  ticketId: string | null;
+  commentId: string | null;
+  type: string;
+  url: string;
+  fileName: string;
+  sizeBytes: number;
+  createdAt: string;
+  uploadedBy: { id: string; name: string };
+}
+
+export const uploadsApi = {
+  sign: () =>
+    request<{
+      cloudName: string;
+      apiKey: string;
+      timestamp: number;
+      signature: string;
+      folder: string;
+    }>('/uploads/sign', { method: 'POST' }, true),
+  createAttachment: (payload: {
+    ticketId?: string;
+    commentId?: string;
+    type: string;
+    url: string;
+    fileName: string;
+    sizeBytes: number;
+  }) =>
+    request<AttachmentView>('/attachments', { method: 'POST', body: JSON.stringify(payload) }, true),
+  deleteAttachment: (id: string) =>
+    request<{ success: boolean }>(`/attachments/${id}`, { method: 'DELETE' }, true),
 };

@@ -8,6 +8,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TeamsModule } from './teams/teams.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { WorkflowModule } from './workflow/workflow.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     TicketsModule,
     RealtimeModule,
     NotificationsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

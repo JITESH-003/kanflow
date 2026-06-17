@@ -80,7 +80,21 @@ export class TicketsService {
         stage: STAGE_SELECT,
         creator: USER_SELECT,
         assignees: { include: { user: USER_SELECT } },
-        comments: { include: { author: USER_SELECT }, orderBy: { createdAt: 'asc' } },
+        comments: {
+          include: {
+            author: USER_SELECT,
+            attachments: {
+              include: { uploadedBy: { select: { id: true, name: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        attachments: {
+          where: { commentId: null },
+          include: { uploadedBy: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
         activities: { include: { actor: USER_SELECT }, orderBy: { createdAt: 'desc' }, take: 50 },
       },
     });
@@ -233,7 +247,10 @@ export class TicketsService {
   listComments(ticketId: string) {
     return this.prisma.comment.findMany({
       where: { ticketId },
-      include: { author: USER_SELECT },
+      include: {
+        author: USER_SELECT,
+        attachments: { include: { uploadedBy: { select: { id: true, name: true } } } },
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -243,7 +260,10 @@ export class TicketsService {
     if (!ticket) throw new NotFoundException('Ticket not found');
     const comment = await this.prisma.comment.create({
       data: { ticketId, authorId, body },
-      include: { author: USER_SELECT },
+      include: {
+        author: USER_SELECT,
+        attachments: { include: { uploadedBy: { select: { id: true, name: true } } } },
+      },
     });
     await this.addWatcher(ticketId, authorId);
     await this.log(ticketId, authorId, 'comment_added');
