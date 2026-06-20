@@ -5,7 +5,11 @@ import { useState, type FormEvent } from 'react';
 import { GlassCard } from './ui/glass-card';
 import { GradientButton } from './ui/gradient-button';
 import { PasswordField } from './ui/password-field';
+import { Spinner } from './ui/spinner';
 import { TextField } from './ui/text-field';
+
+const DEMO_EMAIL = 'demo@kanflow.dev';
+const DEMO_PASSWORD = 'demo12345';
 
 export type AuthMode = 'signin' | 'signup';
 
@@ -27,8 +31,20 @@ export function AuthCard({
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const isSignup = mode === 'signup';
+
+  async function handleDemo() {
+    setError(null);
+    setDemoLoading(true);
+    try {
+      await onSubmit({ name: '', email: DEMO_EMAIL, password: DEMO_PASSWORD }, 'signin');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Demo sign-in failed');
+      setDemoLoading(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -163,6 +179,28 @@ export function AuthCard({
           {isSignup ? 'Create account' : 'Sign in'}
         </GradientButton>
       </form>
+
+      {!isSignup && (
+        <>
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-xs uppercase tracking-wider text-white/30">or</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <button
+            type="button"
+            onClick={handleDemo}
+            disabled={demoLoading || loading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/90 transition-colors hover:border-indigo-400/40 hover:bg-white/10 disabled:opacity-60"
+          >
+            {demoLoading ? <Spinner className="h-4 w-4" /> : <span>✨</span>}
+            Explore the live demo
+          </button>
+          {/* <p className="mt-2 text-center text-xs text-white/35">
+            Prefilled workspace with real flow data — no signup needed
+          </p> */}
+        </>
+      )}
 
       <p className="mt-6 text-center text-sm text-white/50">
         {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}

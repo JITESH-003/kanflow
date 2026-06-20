@@ -8,13 +8,16 @@ import { AuroraBackground } from '@/components/aurora-background';
 import { GradientButton } from '@/components/ui/gradient-button';
 import { Modal } from '@/components/ui/modal';
 import { RoleBadge } from '@/components/ui/role-badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
+import { useToast } from '@/components/ui/toast';
 import { teamsApi, type TeamSummary } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -46,6 +49,7 @@ export default function HomePage() {
       const team = await teamsApi.create(name.trim());
       setName('');
       setOpen(false);
+      toast.success('Team created');
       router.push(`/teams/${team.id}`);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Could not create team');
@@ -70,8 +74,10 @@ export default function HomePage() {
         </div>
 
         {teams === null ? (
-          <div className="flex justify-center py-20">
-            <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+            ))}
           </div>
         ) : teams.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">

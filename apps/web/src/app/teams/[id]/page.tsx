@@ -21,7 +21,9 @@ import { MemberPicker } from '@/components/ui/member-picker';
 import { Modal } from '@/components/ui/modal';
 import { RoleBadge } from '@/components/ui/role-badge';
 import { Select } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
+import { useToast } from '@/components/ui/toast';
 import {
   teamsApi,
   ticketsApi,
@@ -117,6 +119,11 @@ function Column({
         {tickets.map((t) => (
           <TicketCardView key={t.id} ticket={t} onClick={() => onCardClick(t.id)} />
         ))}
+        {tickets.length === 0 && (
+          <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-white/[0.06] py-10 text-xs text-white/25">
+            No tickets
+          </div>
+        )}
       </div>
     </div>
   );
@@ -129,6 +136,7 @@ export default function BoardPage() {
   const searchParams = useSearchParams();
   const qc = useQueryClient();
   const socket = useSocket();
+  const toast = useToast();
 
   const [presence, setPresence] = useState<{ id: string; name: string }[]>([]);
   const [mineOnly, setMineOnly] = useState(false);
@@ -197,6 +205,7 @@ export default function BoardPage() {
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(['tickets', id], ctx.prev);
+      toast.error('Could not move the ticket — change reverted');
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['tickets', id] }),
   });
@@ -205,6 +214,19 @@ export default function BoardPage() {
 
   const myRole = teamQ.data?.members.find((m) => m.user.id === user?.id)?.role;
   const canWrite = !!myRole && myRole !== 'viewer';
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'n' && e.key !== 'N') return;
+      if (!canWrite || newOpen || openTicketId) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      e.preventDefault();
+      setNewOpen(true);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canWrite, newOpen, openTicketId]);
 
   function onDragEnd(event: DragEndEvent) {
     const ticketId = String(event.active.id);
@@ -234,6 +256,7 @@ export default function BoardPage() {
       setNewAssigneeIds([]);
       setNewOpen(false);
       qc.invalidateQueries({ queryKey: ['tickets', id] });
+      toast.success('Ticket created');
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Could not create ticket');
     } finally {
@@ -316,8 +339,17 @@ export default function BoardPage() {
         </div>
 
         {wfQ.isLoading || ticketsQ.isLoading ? (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          <div className="no-scrollbar flex flex-1 gap-4 overflow-x-auto pb-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex w-72 shrink-0 flex-col">
+                <Skeleton className="mb-3 h-5 w-24" />
+                <div className="flex flex-1 flex-col gap-2 rounded-2xl border border-white/5 bg-white/[0.02] p-2">
+                  {Array.from({ length: 3 }).map((_, j) => (
+                    <Skeleton key={j} className="h-20 w-full rounded-xl" />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <DndContext sensors={sensors} onDragEnd={canWrite ? onDragEnd : undefined}>

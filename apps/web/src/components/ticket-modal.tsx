@@ -9,6 +9,7 @@ import { GradientButton } from './ui/gradient-button';
 import { MemberPicker } from './ui/member-picker';
 import { Select } from './ui/select';
 import { Spinner } from './ui/spinner';
+import { useToast } from './ui/toast';
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -99,6 +100,7 @@ export function TicketModal({
 }) {
   const qc = useQueryClient();
   const socket = useSocket();
+  const toast = useToast();
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', ticketId],
     queryFn: () => ticketsApi.get(ticketId),
@@ -147,6 +149,14 @@ export function TicketModal({
       socket.off('presence:update', onPresence);
     };
   }, [socket, ticketId, qc]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   async function handleSelect(
     files: File[],
@@ -208,8 +218,13 @@ export function TicketModal({
       setRemovedAttachmentIds([]);
       qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
       qc.invalidateQueries({ queryKey: ['tickets', teamId] });
+      toast.success('Changes saved');
     },
-    onError: (e) => setUploadError(e instanceof Error ? e.message : 'Save failed'),
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : 'Save failed';
+      setUploadError(msg);
+      toast.error(msg);
+    },
   });
 
   const assignedMembers = members.filter((m) => assigneeIds.includes(m.user.id));

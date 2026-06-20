@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Typecheck · Build (web + api)
+    runs-on: ubuntu-latest
+    env:
+      # prisma generate / next build never connect; a dummy URL keeps config happy.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/kanflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build API (prisma generate + nest build = typecheck)
+        run: npm run build:api
+
+      - name: Build web (next build = lint + typecheck)
+        run: npm run build:web
