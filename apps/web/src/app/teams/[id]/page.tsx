@@ -305,6 +305,12 @@ export default function BoardPage() {
             >
               Workflow
             </Link>
+            <Link
+              href={`/teams/${id}/insights`}
+              className="rounded-lg border border-indigo-400/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-100 transition-colors hover:bg-indigo-500/20"
+            >
+              Insights
+            </Link>
             {canWrite && <GradientButton onClick={() => setNewOpen(true)}>+ New ticket</GradientButton>}
           </div>
         </div>

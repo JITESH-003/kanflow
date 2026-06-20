@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ActivityAction, Prisma } from '../generated/prisma/client';
+import { InsightsService } from '../insights/insights.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -23,6 +24,7 @@ export class TicketsService {
     private readonly workflows: WorkflowService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
+    private readonly insights: InsightsService,
   ) {}
 
   private async addWatcher(ticketId: string, userId: string) {
@@ -197,6 +199,7 @@ export class TicketsService {
       from: ticket.stage?.name ?? null,
       to: stage.name,
     });
+    void this.insights.scanAgingForTeam(moved.teamId).catch(() => undefined);
     return moved;
   }
 

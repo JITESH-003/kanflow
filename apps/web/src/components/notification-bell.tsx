@@ -17,6 +17,8 @@ function describe(n: NotificationView): string {
       return `New comment on "${title}"`;
     case 'stage_changed':
       return `"${title}" moved to ${(n.payload?.to as string) ?? 'a new stage'}`;
+    case 'aging':
+      return `⏳ "${title}" is aging in ${(n.payload?.stageName as string) ?? 'its stage'}`;
     default:
       return `Update on "${title}"`;
   }

@@ -342,6 +342,73 @@ export interface AttachmentView {
   uploadedBy: { id: string; name: string };
 }
 
+export interface InsightsStageRef {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface InsightsPerStage {
+  stageId: string;
+  name: string;
+  position: number;
+  isInitial: boolean;
+  isTerminal: boolean;
+  p50Ms: number;
+  p90Ms: number;
+  avgMs: number;
+  sampleCount: number;
+  wip: number;
+}
+
+export interface InsightsAging {
+  ticketId: string;
+  title: string;
+  stageId: string;
+  stageName: string;
+  ageMs: number;
+  p90Ms: number;
+  overByMs: number;
+  assigneeIds: string[];
+}
+
+export interface InsightsForecast {
+  backlog: number;
+  p50Days: number;
+  p85Days: number;
+  p95Days: number;
+  p50Date: string;
+  p85Date: string;
+  p95Date: string;
+}
+
+export interface InsightsData {
+  hasWorkflow: boolean;
+  generatedAt?: string;
+  kpis?: {
+    wip: number;
+    throughputPerWeek: number;
+    completedCount: number;
+    leadTimeP50Ms: number;
+    leadTimeP90Ms: number;
+    cycleTimeP50Ms: number;
+    cycleTimeP90Ms: number;
+    flowEfficiencyPct: number;
+  };
+  stages?: InsightsStageRef[];
+  perStage?: InsightsPerStage[];
+  bottleneck?: { stageId: string; name: string; p90Ms: number } | null;
+  aging?: InsightsAging[];
+  throughput?: { weekStart: string; count: number }[];
+  cfd?: { date: string; counts: Record<string, number> }[];
+  forecast?: InsightsForecast | null;
+}
+
+export const insightsApi = {
+  get: (teamId: string) =>
+    request<InsightsData>(`/teams/${teamId}/insights`, { method: 'GET' }, true),
+};
+
 export const uploadsApi = {
   sign: () =>
     request<{
