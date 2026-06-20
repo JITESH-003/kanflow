@@ -35,6 +35,10 @@ export class StageInput {
 
   @IsBoolean()
   isInitial: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isFinal?: boolean;
 }
 
 export class RuleInput {

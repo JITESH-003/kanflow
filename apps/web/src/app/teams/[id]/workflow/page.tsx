@@ -15,6 +15,7 @@ interface EditableStage {
   id?: string;
   name: string;
   isInitial: boolean;
+  isFinal: boolean;
 }
 
 function slugify(name: string) {
@@ -48,7 +49,13 @@ export default function WorkflowEditorPage() {
     Promise.all([workflowApi.get(id), teamsApi.get(id)])
       .then(([wf, team]) => {
         setStages(
-          wf.stages.map((s) => ({ key: s.id, id: s.id, name: s.name, isInitial: s.isInitial })),
+          wf.stages.map((s) => ({
+            key: s.id,
+            id: s.id,
+            name: s.name,
+            isInitial: s.isInitial,
+            isFinal: s.isFinal,
+          })),
         );
         const myRole = team.members.find((m) => m.user.id === user.id)?.role;
         setCanEdit(myRole === 'admin' || myRole === 'manager');
@@ -76,10 +83,14 @@ export default function WorkflowEditorPage() {
     setStages((prev) => prev.map((s) => ({ ...s, isInitial: s.key === key })));
   }
 
+  function toggleFinal(key: string) {
+    setStages((prev) => prev.map((s) => (s.key === key ? { ...s, isFinal: !s.isFinal } : s)));
+  }
+
   function addStage() {
     setStages((prev) => [
       ...prev,
-      { key: crypto.randomUUID(), name: 'New stage', isInitial: false },
+      { key: crypto.randomUUID(), name: 'New stage', isInitial: false, isFinal: false },
     ]);
   }
 
@@ -110,11 +121,24 @@ export default function WorkflowEditorPage() {
         const count = seen.get(slug) ?? 0;
         seen.set(slug, count + 1);
         if (count > 0) slug = `${slug}-${count + 1}`;
-        return { id: s.id, name: s.name.trim() || 'Untitled', slug, position: i, isInitial: s.isInitial };
+        return {
+          id: s.id,
+          name: s.name.trim() || 'Untitled',
+          slug,
+          position: i,
+          isInitial: s.isInitial,
+          isFinal: s.isFinal,
+        };
       });
       const updated = await workflowApi.update(id, { stages: payloadStages, rules: [] });
       setStages(
-        updated.stages.map((s) => ({ key: s.id, id: s.id, name: s.name, isInitial: s.isInitial })),
+        updated.stages.map((s) => ({
+          key: s.id,
+          id: s.id,
+          name: s.name,
+          isInitial: s.isInitial,
+          isFinal: s.isFinal,
+        })),
       );
       setSaved(true);
     } catch (e) {
@@ -194,6 +218,18 @@ export default function WorkflowEditorPage() {
                   } disabled:opacity-50`}
                 >
                   {s.isInitial ? 'Start' : 'Set start'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFinal(s.key)}
+                  disabled={!canEdit}
+                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                    s.isFinal
+                      ? 'border border-emerald-400/30 bg-emerald-500/20 text-emerald-200'
+                      : 'border border-white/10 text-white/40 hover:bg-white/5'
+                  } disabled:opacity-50`}
+                >
+                  {s.isFinal ? 'Done' : 'Set done'}
                 </button>
                 {canEdit && (
                   <>

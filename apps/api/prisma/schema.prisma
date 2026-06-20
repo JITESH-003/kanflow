@@ -117,6 +117,7 @@ model WorkflowStage {
   slug       String
   position   Int
   isInitial  Boolean @default(false)
+  isFinal    Boolean @default(false)
 
   workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   tickets  Ticket[]

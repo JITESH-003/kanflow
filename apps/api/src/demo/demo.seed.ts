@@ -142,11 +142,11 @@ export async function seedDemo(prisma: PrismaClient) {
   });
   await prisma.workflow.create({ data: { id: wfId, teamId, name: 'Default workflow' } });
   const stageDefs = [
-    { name: 'Backlog', slug: 'backlog', isInitial: true },
-    { name: 'To Do', slug: 'to-do', isInitial: false },
-    { name: 'In Progress', slug: 'in-progress', isInitial: false },
-    { name: 'In Review', slug: 'in-review', isInitial: false },
-    { name: 'Done', slug: 'done', isInitial: false },
+    { name: 'Backlog', slug: 'backlog', isInitial: true, isFinal: false },
+    { name: 'To Do', slug: 'to-do', isInitial: false, isFinal: false },
+    { name: 'In Progress', slug: 'in-progress', isInitial: false, isFinal: false },
+    { name: 'In Review', slug: 'in-review', isInitial: false, isFinal: false },
+    { name: 'Done', slug: 'done', isInitial: false, isFinal: true },
   ];
   const stages = stageDefs.map((s, i) => ({ ...s, id: randomUUID(), position: i }));
   await prisma.workflowStage.createMany({
@@ -157,6 +157,7 @@ export async function seedDemo(prisma: PrismaClient) {
       slug: s.slug,
       position: s.position,
       isInitial: s.isInitial,
+      isFinal: s.isFinal,
     })),
   });
 

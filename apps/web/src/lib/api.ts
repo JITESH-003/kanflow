@@ -139,6 +139,7 @@ export interface WorkflowStageView {
   slug: string;
   position: number;
   isInitial: boolean;
+  isFinal: boolean;
 }
 
 export interface WorkflowRuleView {
@@ -162,6 +163,7 @@ export interface WorkflowStageInput {
   slug: string;
   position: number;
   isInitial: boolean;
+  isFinal?: boolean;
 }
 
 export interface WorkflowRuleInput {

@@ -10,7 +10,7 @@ const FORECAST_WINDOW_DAYS = 60;
 const FORECAST_TRIALS = 5000;
 const MIN_BASELINE_SAMPLES = 3;
 
-type StageMeta = { id: string; name: string; position: number; isInitial: boolean };
+type StageMeta = { id: string; name: string; position: number; isInitial: boolean; isFinal: boolean };
 type Segment = { stageId: string; enteredAt: number; leftAt: number | null };
 type TicketModel = {
   id: string;
@@ -34,7 +34,7 @@ type AgingItem = {
 type FlowModel = {
   stages: StageMeta[];
   stageById: Map<string, StageMeta>;
-  terminalStageId: string;
+  finalStageIds: Set<string>;
   ticketModels: TicketModel[];
   baselines: Map<string, Baseline>;
   aging: AgingItem[];
@@ -64,12 +64,16 @@ export class InsightsService {
       name: s.name,
       position: s.position,
       isInitial: s.isInitial,
+      isFinal: s.isFinal,
     }));
     if (!stages.length) return null;
 
     const stageById = new Map(stages.map((s) => [s.id, s]));
     const initialStage = stages.find((s) => s.isInitial) ?? stages[0];
-    const terminalStage = stages[stages.length - 1];
+    const flagged = stages.filter((s) => s.isFinal);
+    const finalStageIds = new Set(
+      flagged.length ? flagged.map((s) => s.id) : [stages[stages.length - 1].id],
+    );
 
     const tickets = await this.prisma.ticket.findMany({
       where: { teamId },
@@ -124,7 +128,7 @@ export class InsightsService {
         createdAt: t.createdAt.getTime(),
         assigneeIds: t.assignees.map((a) => a.userId),
         segments,
-        completedAt: curStage === terminalStage.id ? enteredAt : null,
+        completedAt: finalStageIds.has(curStage) ? enteredAt : null,
       };
     });
 
@@ -153,7 +157,7 @@ export class InsightsService {
       const open = tm.segments[tm.segments.length - 1];
       if (open.leftAt !== null) continue;
       const stage = stageById.get(open.stageId);
-      if (!stage || stage.id === terminalStage.id) continue;
+      if (!stage || finalStageIds.has(stage.id)) continue;
       const base = baselines.get(open.stageId);
       if (!base || base.count < MIN_BASELINE_SAMPLES || base.p90 <= 0) continue;
       const age = now - open.enteredAt;
@@ -174,7 +178,7 @@ export class InsightsService {
     return {
       stages,
       stageById,
-      terminalStageId: terminalStage.id,
+      finalStageIds,
       ticketModels,
       baselines,
       aging,
@@ -220,7 +224,7 @@ export class InsightsService {
     const m = await this.buildModel(teamId);
     if (!m) return { hasWorkflow: false as const };
 
-    const { stages, stageById, terminalStageId, ticketModels, baselines, aging, now } = m;
+    const { stages, stageById, finalStageIds, ticketModels, baselines, aging, now } = m;
 
     const wipByStage = new Map<string, number>();
     for (const s of stages) wipByStage.set(s.id, 0);
@@ -228,7 +232,7 @@ export class InsightsService {
     for (const tm of ticketModels) {
       const open = tm.segments[tm.segments.length - 1];
       wipByStage.set(open.stageId, (wipByStage.get(open.stageId) ?? 0) + 1);
-      if (open.stageId !== terminalStageId) wipTotal++;
+      if (!finalStageIds.has(open.stageId)) wipTotal++;
     }
 
     const completed = ticketModels.filter((tm) => tm.completedAt !== null);
@@ -246,7 +250,7 @@ export class InsightsService {
       for (const seg of tm.segments) {
         if (seg.leftAt === null) continue;
         const st = stageById.get(seg.stageId);
-        if (st && !st.isInitial && st.id !== terminalStageId) activeMs += seg.leftAt - seg.enteredAt;
+        if (st && !st.isInitial && !finalStageIds.has(st.id)) activeMs += seg.leftAt - seg.enteredAt;
       }
       totalMs += tm.completedAt! - tm.createdAt;
     }
@@ -290,7 +294,7 @@ export class InsightsService {
         name: s.name,
         position: s.position,
         isInitial: s.isInitial,
-        isTerminal: s.id === terminalStageId,
+        isTerminal: finalStageIds.has(s.id),
         p50Ms: b.p50,
         p90Ms: b.p90,
         avgMs: b.avg,

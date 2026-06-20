@@ -4,11 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 
 const DEFAULT_STAGES = [
-  { name: 'Backlog', slug: 'backlog', position: 0, isInitial: true },
-  { name: 'To Do', slug: 'to-do', position: 1, isInitial: false },
-  { name: 'In Progress', slug: 'in-progress', position: 2, isInitial: false },
-  { name: 'In Review', slug: 'in-review', position: 3, isInitial: false },
-  { name: 'Done', slug: 'done', position: 4, isInitial: false },
+  { name: 'Backlog', slug: 'backlog', position: 0, isInitial: true, isFinal: false },
+  { name: 'To Do', slug: 'to-do', position: 1, isInitial: false, isFinal: false },
+  { name: 'In Progress', slug: 'in-progress', position: 2, isInitial: false, isFinal: false },
+  { name: 'In Review', slug: 'in-review', position: 3, isInitial: false, isFinal: false },
+  { name: 'Done', slug: 'done', position: 4, isInitial: false, isFinal: true },
 ];
 
 @Injectable()
@@ -62,7 +62,13 @@ export class WorkflowService {
         if (s.id) {
           await tx.workflowStage.update({
             where: { id: s.id },
-            data: { name: s.name, slug: s.slug, position: i, isInitial: s.isInitial },
+            data: {
+              name: s.name,
+              slug: s.slug,
+              position: i,
+              isInitial: s.isInitial,
+              isFinal: s.isFinal ?? false,
+            },
           });
         } else {
           await tx.workflowStage.create({
@@ -72,6 +78,7 @@ export class WorkflowService {
               slug: s.slug,
               position: i,
               isInitial: s.isInitial,
+              isFinal: s.isFinal ?? false,
             },
           });
         }
